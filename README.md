@@ -11,4 +11,4 @@ calculator to improve the UI and code design for future expansion.
 	* Range checking for number of frets
 * Constants created for core values
 * Consolidation of drawing functionality into functions
-
+* Almost-fully constrained sketch.  Sketch is fully constrained within itself.
