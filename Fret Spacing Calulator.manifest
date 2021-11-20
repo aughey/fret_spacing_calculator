@@ -1,0 +1,13 @@
+{
+	"autodeskProduct":	"Fusion360",
+	"type":	"addin",
+	"id":	"dcceb7d1-fa5c-4764-8f16-baa0551bfd26",
+	"author":	"James Cherry",
+	"description":	{
+		"":	"Calulate the number of frets and spacing with number of frets, Scale Length, and fret spacing constant."
+	},
+	"version":	"1.0.0",
+	"runOnStartup":	false,
+	"supportedOS":	"windows|mac",
+	"editEnabled":	true
+}
