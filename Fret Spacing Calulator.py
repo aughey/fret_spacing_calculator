@@ -1,4 +1,5 @@
 #Author-James Cherry (TwoCherriesInstruments.com)
+#Modified by: John Aughey
 #string instrument Fret generatord
 #Scale Lenth and nuber of frets are used to calculate lines in acurate position of frets.
 
