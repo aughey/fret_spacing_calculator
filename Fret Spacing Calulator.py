@@ -63,7 +63,20 @@ def stop(context):
         if ui:
             ui.messageBox('Failed:\n{}'.format(traceback.format_exc()))	      
 
-def drawFrets(ScaleLength, Fret_Constant, Number_of_frets, nutWidth, bridgeWidth, SketchPlane):
+def midpoint(p0,p1,xoffset=0,yoffset=0):
+    return adsk.core.Point3D.create((p0.geometry.x + p1.geometry.x)/2+xoffset, (p0.geometry.y + p1.geometry.y)/2+yoffset, (p0.geometry.z + p1.geometry.z)/2)
+
+def midline(line,xoffset=0,yoffset=0):
+    return midpoint(line.startSketchPoint, line.endSketchPoint,xoffset,yoffset)
+
+def ConstrainLineDistance(sketch,line,xoffset=0,yoffset=0):
+    sketch.sketchDimensions.addDistanceDimension(line.startSketchPoint, line.endSketchPoint, adsk.fusion.DimensionOrientations.AlignedDimensionOrientation,
+                midline(line,xoffset,yoffset))
+
+def SetYPoint(point, y):
+    return adsk.core.Point3D.create(point.x,y,point.z)
+
+def drawFrets(ScaleLength, Fret_Constant, Number_of_frets, nutWidth, bridgeWidth, SketchPlane, Preview=True):
     ui = None
     
     try:
@@ -91,20 +104,73 @@ def drawFrets(ScaleLength, Fret_Constant, Number_of_frets, nutWidth, bridgeWidth
         nutLine = lines.addByTwoPoints(point1, point2)
         fbTopLine = lines.addByTwoPoints(nutLine.endSketchPoint, bridgeLine.endSketchPoint)
         fbBottomLine = lines.addByTwoPoints(nutLine.startSketchPoint, bridgeLine.startSketchPoint)
+
+        sketch.geometricConstraints.addVertical(nutLine)
+        sketch.geometricConstraints.addVertical(bridgeLine)
+
+        origin = sketchPoints.add(adsk.core.Point3D.create(0,0,0))
+        h1 = sketchPoints.add(adsk.core.Point3D.create(ScaleLength,0,0))
+        horizontalConstruction = lines.addByTwoPoints(origin, h1)
+        horizontalConstruction.isConstruction = True
+
+        VerticalConstruction = lines.addByTwoPoints(origin, point4)
+        VerticalConstruction.isConstruction = True
+
+        if not Preview:
+            sketch.geometricConstraints.addHorizontal(horizontalConstruction)
+            sketch.geometricConstraints.addMidPoint(origin,bridgeLine)
+            sketch.geometricConstraints.addMidPoint(h1,nutLine)
+            ConstrainLineDistance(sketch,bridgeLine,-1)
+            ConstrainLineDistance(sketch,nutLine,1)
+            ConstrainLineDistance(sketch,horizontalConstruction,0,-bridgeWidth*1.1)
         
         working_scale_length = ScaleLength
 
         for i in range(Number_of_frets):    
-           #draw fret lines 
-           #distance from nut to first fret
-           frets = working_scale_length / Fret_Constant
-           #fret position
-           x = working_scale_length - frets
-           #draw fret lines
-           fretLine = lines.addByTwoPoints(adsk.core.Point3D.create(x,-bridgeWidth/2,0), adsk.core.Point3D.create(x,bridgeWidth/2,0))
-           #fretLine.trim(fretLine.endSketchPoint)
-           #make fret line = to x
-           working_scale_length = x
+            #draw fret lines 
+            #distance from nut to first fret
+            frets = working_scale_length / Fret_Constant
+            #fret position
+            x = working_scale_length - frets
+            #draw fret lines
+            point0 = adsk.core.Point3D.create(x,-bridgeWidth/2,0)
+            point1 = adsk.core.Point3D.create(x,bridgeWidth/2,0)
+            fretLine = lines.addByTwoPoints(point0,point1)
+            print(x)
+
+            if not Preview:
+                sketch.geometricConstraints.addVertical(fretLine)
+               
+                sketch.sketchDimensions.addDistanceDimension(
+                    nutLine.endSketchPoint, 
+                    fretLine.endSketchPoint,
+                    adsk.fusion.DimensionOrientations.HorizontalDimensionOrientation,
+                    SetYPoint(
+                        midpoint(nutLine.endSketchPoint,fretLine.endSketchPoint),
+                        max(nutLine.endSketchPoint.geometry.y,fretLine.endSketchPoint.geometry.y) + i + 1
+                    )
+                )
+                sketch.geometricConstraints.addCoincident(fretLine.endSketchPoint,fbTopLine)
+                sketch.geometricConstraints.addCoincident(fretLine.startSketchPoint,fbBottomLine)
+
+            if i == 12:
+                label = sketch.sketchTexts.createInput2("12",1)
+
+                labelline = lines.addByTwoPoints(
+                    adsk.core.Point3D.create(point0.x-1,point0.y,0),
+                    adsk.core.Point3D.create(point0.x+1,point0.y,0))
+                labelline.isConstruction = True
+                sketch.geometricConstraints.addMidPoint(fretLine.startSketchPoint,labelline)
+                sketch.geometricConstraints.addHorizontal(labelline)
+                label.setAsAlongPath(labelline,False,
+                    adsk.core.HorizontalAlignments.CenterHorizontalAlignment,
+                    0)
+                sketch.sketchTexts.add(label)
+
+                
+            #fretLine.trim(fretLine.endSketchPoint)
+            #make fret line = to x
+            working_scale_length = x
           
            
            
@@ -172,7 +238,7 @@ def GetDefaultConstructionPlane():
     rootComp = design.rootComponent
     return rootComp.xYConstructionPlane
 
-def DrawFromEventArgs(eventArgs):
+def DrawFromEventArgs(eventArgs, Preview=True):
     # Get the values from the command inputs. 
     inputs = eventArgs.command.commandInputs
 
@@ -188,14 +254,14 @@ def DrawFromEventArgs(eventArgs):
     sp = selected_sketch_plane
     if not sp:
         sp = GetDefaultConstructionPlane()
-    drawFrets(scaleLength, constant, number_of_frets, nut_width, bridge_width, sp)
+    drawFrets(scaleLength, constant, number_of_frets, nut_width, bridge_width, sp, Preview)
 
 class CommandExecuteHandler(adsk.core.CommandEventHandler):
     def __init__(self):
         super().__init__()
     def notify(self, args):
         eventArgs = adsk.core.CommandEventArgs.cast(args)
-        DrawFromEventArgs(eventArgs)
+        DrawFromEventArgs(eventArgs, False)
        
         
 class InputChangedHandler(adsk.core.InputChangedEventHandler):
@@ -220,7 +286,7 @@ class CommandExecutePreviewHandler(adsk.core.CommandEventHandler):
         super().__init__()
     def notify(self, args):
         eventArgs = adsk.core.CommandEventArgs.cast(args)
-        DrawFromEventArgs(eventArgs)
+        DrawFromEventArgs(eventArgs, False)
        
         # This will result in the execute event not being fired.
         eventArgs.isValidResult = True
